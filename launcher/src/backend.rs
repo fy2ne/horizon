@@ -2306,7 +2306,13 @@ pub fn need_prepared(tag: &str) -> Result<(), String> {
 /// the gate, a sign-in that can't be renewed (no network, expired) still lets the game start,
 /// offline.
 pub fn client(tag: &str) -> Result<Command, String> {
-    let (session, offline) = account::session_for_game(&game_home(), false)
+    client_for(tag, false)
+}
+
+pub fn client_for(tag: &str, offline_without_owner: bool) -> Result<Command, String> {
+    let settings = Settings::load();
+    let offline_allowed = offline_without_owner || settings.dev_offline;
+    let (session, offline) = account::session_for_game(&game_home(), offline_allowed)
         .map_err(|refused| format!("{refused} Sign in with `horizon-launcher account sign-in`."))?;
     need_prepared(tag)?;
     complete_assets(tag);

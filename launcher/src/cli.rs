@@ -729,6 +729,9 @@ enum Cmd {
         /// Join this server at once: an address, or a server of the list by name or position
         #[arg(long, conflicts_with_all = ["world", "join"])]
         server: Option<String>,
+        /// Play with an offline account as this username (no Microsoft account required)
+        #[arg(long)]
+        username: Option<String>,
         /// An extra argument for the game, passed through as-is (repeatable), for example
         /// --server-thread
         #[arg(long = "arg", value_name = "ARG", allow_hyphen_values = true)]
@@ -1282,6 +1285,7 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
             creative,
             join,
             server,
+            username,
             arg,
         } => {
             let instance = match instance {
@@ -1316,7 +1320,8 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
                 after_exit(&instance, &vars);
                 return played;
             }
-            let mut cmd = backend::client(&instance.resolve_version(version.as_deref())?)?;
+            let offline = username.is_some();
+            let mut cmd = backend::client_for(&instance.resolve_version(version.as_deref())?, offline)?;
             instances::apply(&mut cmd, &instance)?;
             if let Some(code) = join {
                 backend::join_friend(&mut cmd, &code)?;
@@ -1335,7 +1340,9 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
             cmd.args(arg);
             let started = std::time::Instant::now();
             let accounts = Accounts::load();
-            if let Some(name) = accounts.name_arg() {
+            if let Some(user) = &username {
+                cmd.arg("--username").arg(user);
+            } else if let Some(name) = accounts.name_arg() {
                 cmd.arg("--name").arg(name);
             }
             cmd.envs(accounts.look_env());
@@ -3444,6 +3451,15 @@ mod tests {
         );
         set_setting(&mut settings, "language", "system").unwrap();
         assert_eq!(settings.language, None);
+    }
+
+    #[test]
+    fn play_takes_username_for_offline_account() {
+        let cli = Cli::try_parse_from(["horizon-launcher", "play", "--username", "fy2ne"]).unwrap();
+        match cli.command {
+            Some(Cmd::Play { username, .. }) => assert_eq!(username.as_deref(), Some("fy2ne")),
+            _ => panic!("expected play"),
+        }
     }
 
     #[test]
